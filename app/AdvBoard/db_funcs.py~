@@ -1,0 +1,126 @@
+import os
+import json
+from aiohttp import web
+from requests import session
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from app.AdvBoard.models import Advertisement, User, Base
+from sqlalchemy import select
+
+POSTGRES_USER = os.getenv('POSTGRES_USER', 'postgres')
+POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD', 'postgres')
+POSTGRES_DB = os.getenv('POSTGRES_DB', 'postgres')
+POSGRES_Host = os.getenv('POSTGRES_HOST', 'localhost')
+POSTGRES_PORT = os.getenv('POSTGRES_PORT', '5432')
+
+
+PG_DSN = (f"postgresql+asyncpg://"
+          f"{POSTGRES_USER}:{POSTGRES_PASSWORD}@"
+          f"{POSGRES_Host}:{POSTGRES_PORT}/{POSTGRES_DB}")
+
+engine = create_async_engine(PG_DSN)
+Session = async_sessionmaker(bind=engine, expire_on_commit=False)
+
+
+
+
+
+
+
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+async def close_db():
+    await engine.dispose()
+
+
+def get_http_error(err_cls, message: str | dict | list):
+    """function to create json error response."""
+    error_message = json.dumps({'error': message})
+    return err_cls(text=error_message, content_type="application/json")
+
+
+  # ##########################################################################
+
+async def create_user(user: User, session: AsyncSession):
+    """Creating new user in BD, and return its id."""
+    session.add(user)
+    await session.commit()
+    return user.id
+
+
+async def get_user_by_id(user_id: int, session: AsyncSession):
+    """Return user by id."""
+    user = await session.scalar(select(User).where(User.id == user_id))
+    if user is None:
+        raise get_http_error(web.HTTPNotFound, "User not found")
+    return user.dict
+
+
+async def update_user(user_id: int, new_data: dict, session: AsyncSession):
+    """Update existing user by id."""
+    try:
+        user = await session.get(User, user_id)
+        if user:
+            user.name = new_data['name']
+            await session.commit()
+            return user
+    except Exception as e:
+        await session.rollback()
+        raise e
+
+
+async def delete_user(user_id: int, session: AsyncSession):
+    """Delete existing user by id."""
+    user = await session.get(User, user_id)
+    try :
+        await session.delete(user)
+        await session.commit()
+    except Exception as e:
+        await session.rollback()
+        raise e
+
+  # ##########################################################################
+async def create_adv(adv: Advertisement, session: AsyncSession):
+    """Create new advertisement in BD, and return its id."""
+    session.add(adv)
+    await session.commit()
+    return adv
+
+async def get_adv_by_id(adv_id: int, session: AsyncSession):
+    """Get one advertisement with id from url."""
+    adv = await session.scalar(select(Advertisement).where(Advertisement.id == adv_id))
+    if adv is None:
+        raise get_http_error(web.HTTPNotFound, "Advertisement not found")
+    return adv
+
+async def get_adv_list(session: AsyncSession):
+    """Get all advertisements from database."""
+    query = select(Advertisement)
+    result = await session.execute(query)
+    return result.scalars().all()
+
+
+async def update_adv(adv_id: int, json_data: dict, session: AsyncSession):
+    """Update existing advertisement and return it."""
+    try:
+        adv = await session.get(Advertisement, adv_id)
+        if adv:
+            adv.title = json_data['title']
+            adv.description = json_data['description']
+            await session.commit()
+            return adv
+    except Exception as e:
+        await session.rollback()
+        raise e
+
+
+async def delete_adv(adv_id, session: AsyncSession):
+    """Delete existing advertisement by id."""
+    adv = await get_adv_by_id(adv_id, session)
+    await session.delete(adv)
+    try :
+        await session.commit()
+    except Exception as e:
+        await session.rollback()
+        raise e

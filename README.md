@@ -8,7 +8,7 @@ It provides endpoints for creating, deleting, and editing User and their adverti
 
 1. Clone the repository:
     ```bash
-    git clone https://github.com/Lynatuk666/.git
+    git clone https://github.com/Lynatuk666/Aiohttp_HW
     cd online-classifieds
     ```
 
